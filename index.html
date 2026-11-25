@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Skerrow Light</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Barlow+Semi+Condensed:wght@400;500;600&display=swap">
+<style>
+/* Layout: one full-bleed night strait with the lamp dead centre; type sits on the water at the left, no panels. */
+:root{
+  --ink:#050f17; --sea:#0d2a3d; --tide:#227c86; --lamp:#ffe6a3; --foam:#e6f2ec; --mute:#8fa9b6; --peril:#ff6b57; --drowned:#9dffcf;
+  --display:"IM Fell English","Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --ui:"Barlow Semi Condensed","Arial Narrow","Helvetica Neue",Arial,sans-serif;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{height:100%;padding-block:env(safe-area-inset-top,0px) env(safe-area-inset-bottom,0px);background:var(--ink)}
+body{height:100%;margin:0;background:var(--ink);color:var(--foam);font:400 1rem/1.5 var(--ui);overflow:hidden;overscroll-behavior:none}
+button{font-family:var(--ui)}
+button:focus-visible{outline:2px solid var(--lamp);outline-offset:3px}
+
+#stage{position:relative;height:100%;min-height:340px;overflow:hidden;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;cursor:crosshair}
+#sea{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* in-play readouts */
+.hud{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column;justify-content:space-between;padding-block:12px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.hud button{pointer-events:auto}
+.row{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.row.low{align-items:flex-end}
+.tally{display:flex;flex-direction:column;line-height:1.05}
+.label{font-size:.78rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+.label b{color:var(--foam);font-weight:600}
+.score{font-size:2rem;font-weight:600;font-variant-numeric:tabular-nums;color:var(--lamp);text-shadow:0 1px 12px rgba(5,15,23,.9)}
+.right{display:flex;align-items:center;gap:8px}
+.hulls{display:flex;gap:4px;margin-right:4px}
+.hull{width:22px;height:18px;fill:var(--foam)}
+.hull.gone{fill:none;stroke:var(--peril);stroke-width:1.3;opacity:.8}
+.icon{width:40px;height:40px;border-radius:50%;border:1px solid rgba(143,169,182,.4);background:rgba(5,15,23,.55);color:var(--foam);display:grid;place-items:center;cursor:pointer;padding:0}
+.icon svg{width:18px;height:18px;fill:currentColor}
+.icon .off{display:none}
+.icon[aria-pressed="false"] .wave{display:none}
+.icon[aria-pressed="false"] .off{display:block}
+.pips{position:absolute;top:19px;left:50%;transform:translateX(-50%);display:flex;gap:7px}
+.pip{width:9px;height:9px;transform:rotate(45deg);border:1.5px solid rgba(143,169,182,.6)}
+.pip.sea{border-color:var(--lamp)}
+.pip.ok{background:var(--lamp);border-color:var(--lamp)}
+.pip.lost{background:var(--peril);border-color:var(--peril)}
+.streak{font-weight:600;letter-spacing:.08em;color:var(--lamp);text-shadow:0 1px 10px rgba(5,15,23,.9);font-variant-numeric:tabular-nums}
+.streak small{display:block;font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;color:var(--mute);font-weight:600}
+.streak span{font-size:1.5rem}
+.flare{margin-left:auto;height:48px;padding:0 8px 0 20px;border-radius:24px;border:1px solid var(--lamp);background:rgba(5,15,23,.62);color:var(--lamp);font-weight:600;font-size:.92rem;letter-spacing:.16em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;gap:12px}
+.flare b{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:var(--lamp);color:#1a1405;font-size:1rem;letter-spacing:0;font-variant-numeric:tabular-nums}
+.flare:disabled{border-color:rgba(143,169,182,.3);color:var(--mute);cursor:default}
+.flare:disabled b{background:rgba(143,169,182,.25);color:var(--mute)}
+@media (max-width:620px){.pips{top:66px;left:max(16px,env(safe-area-inset-left,0px));transform:none}}
+
+.toast{position:absolute;left:50%;top:21%;transform:translateX(-50%);font:italic 400 clamp(1.5rem,4.6vw,2.3rem)/1.1 var(--display);color:var(--lamp);text-shadow:0 2px 18px rgba(5,15,23,.95);pointer-events:none;opacity:0;white-space:nowrap}
+.toast.on{animation:toast 2.4s ease both}
+.toast.bad{color:var(--peril)}
+@keyframes toast{0%{opacity:0;transform:translate(-50%,8px)}12%,70%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-6px)}}
+
+/* title, dawn, end and pause sit straight on the water */
+.veil{position:absolute;inset:0;display:flex;overflow-y:auto;touch-action:pan-y;cursor:default;padding-block:28px;padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px));background:linear-gradient(90deg,rgba(5,15,23,.95),rgba(5,15,23,.82) 46%,rgba(5,15,23,.18));animation:rise .45s ease both}
+@keyframes rise{from{opacity:0}to{opacity:1}}
+.sheet{width:min(100%,29rem);margin-block:auto;margin-left:clamp(0px,6vw,88px);display:flex;flex-direction:column;gap:1.15rem;min-width:0}
+.eyebrow{font-size:.78rem;font-weight:600;letter-spacing:.2em;text-transform:uppercase;color:var(--mute)}
+h1,h2{font-family:var(--display);font-weight:400;font-style:italic;margin:0;color:var(--lamp);text-wrap:balance;line-height:1}
+h1{font-size:clamp(3rem,10vw,5.2rem);letter-spacing:-.01em}
+h2{font-size:clamp(2.2rem,7vw,3.2rem)}
+.rules{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.8rem}
+.rules li{display:grid;grid-template-columns:34px 1fr;gap:14px;align-items:center;font-size:1.06rem;line-height:1.35}
+.rules svg{width:34px;height:34px}
+.g-lamp{fill:var(--lamp)} .g-foam{fill:var(--foam)} .g-rock{fill:var(--mute)} .g-eye{fill:var(--drowned)}
+.go{align-self:flex-start;height:52px;padding:0 30px;border:0;border-radius:26px;background:var(--lamp);color:#1a1405;font-weight:600;font-size:1rem;letter-spacing:.16em;text-transform:uppercase;cursor:pointer}
+.go:hover{background:#fff4cf}
+.small{font-size:.92rem;line-height:1.45;color:var(--mute);margin:0}
+.small b{color:var(--foam);font-weight:600;font-variant-numeric:tabular-nums}
+.log{font-family:var(--display);font-size:1.32rem;line-height:1.32;margin:0}
+.stats{display:flex;flex-wrap:wrap;gap:8px 30px;margin:0}
+.stats div{display:flex;flex-direction:column}
+.stats dt{font-size:.74rem;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--mute)}
+.stats dd{margin:0;font-size:1.7rem;font-weight:600;line-height:1.15;font-variant-numeric:tabular-nums}
+.brief{margin:0;display:flex;flex-direction:column;gap:.2rem;font-size:1.04rem;line-height:1.4;border-top:1px solid rgba(143,169,182,.28);padding-top:1rem}
+@media (max-width:760px){.veil{background:rgba(5,15,23,.86)}.sheet{margin-left:0}}
+@media (prefers-reduced-motion:reduce){.veil{animation:none}}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="sea" role="img" aria-label="A night strait seen from above, with a lighthouse on a rock at its centre"></canvas>
+
+  <div class="hud" id="hud" hidden>
+    <div class="row">
+      <div class="tally">
+        <span class="label">Night <b id="hNight">1</b></span>
+        <span class="score" id="hScore">0</span>
+      </div>
+      <div class="right">
+        <div class="hulls" id="hHulls" role="img" aria-label="3 of 3 ships left to lose"></div>
+        <button class="icon" id="bSound" type="button" aria-label="Sound" aria-pressed="true">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 7.5h3l5-4v13l-5-4H3z"/><path class="wave" d="M13.6 6.6a4.8 4.8 0 0 1 0 6.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path class="off" d="M13.2 7.6l4.4 4.8m0-4.8l-4.4 4.8" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+        <button class="icon" id="bPause" type="button" aria-label="Pause">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="4" width="3.4" height="12" rx="1"/><rect x="11.6" y="4" width="3.4" height="12" rx="1"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="pips" id="hPips" aria-hidden="true"></div>
+    <div class="row low">
+      <div class="streak" id="hStreak" hidden><small>Next ship</small><span id="hMult">×2</span></div>
+      <button class="flare" id="bFlare" type="button" aria-label="Fire flare">Flare <b id="hFlare">1</b></button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <section class="veil" id="vTitle" aria-labelledby="tHead">
+    <div class="sheet">
+      <div class="eyebrow">Fl W 10s · 24m · 18M</div>
+      <h1 id="tHead">Skerrow Light</h1>
+      <ul class="rules">
+        <li><svg viewBox="0 0 34 34" aria-hidden="true"><path class="g-lamp" opacity=".8" d="M9 17 32 7v20z"/><circle class="g-foam" cx="8" cy="17" r="5"/></svg><span>Aim the beam. The lamp is heavy and swings slowly, so choose where it goes.</span></li>
+        <li><svg viewBox="0 0 34 34" aria-hidden="true"><path class="g-rock" d="M20 29l2-11 6-4 5 7-2 8z"/><path class="g-lamp" d="M2 13q8-7 16 0-8 7-16 0z"/></svg><span>Ships see the rocks only while your light is on them.</span></li>
+        <li><svg viewBox="0 0 34 34" aria-hidden="true"><circle class="g-eye" cx="11" cy="17" r="3.4"/><circle class="g-eye" cx="23" cy="17" r="3.4"/><circle class="g-eye" opacity=".25" cx="11" cy="17" r="7"/><circle class="g-eye" opacity=".25" cx="23" cy="17" r="7"/></svg><span>The Drowned move only in the dark. Hold the light on one and it burns.</span></li>
+      </ul>
+      <button class="go" id="bStart" type="button">Light the lamp</button>
+      <p class="small">Lose three ships and the watch ends. Space, or the Flare button, lights the whole strait once a night.<span id="tBest"></span></p>
+    </div>
+  </section>
+
+  <section class="veil" id="vDawn" aria-labelledby="dHead" hidden>
+    <div class="sheet">
+      <div class="eyebrow" id="dEyebrow">Dawn</div>
+      <h2 id="dHead">Night 1 kept</h2>
+      <p class="log" id="dLog"></p>
+      <dl class="stats">
+        <div><dt>Through</dt><dd id="dThrough">0</dd></div>
+        <div><dt>Burned</dt><dd id="dBurned">0</dd></div>
+        <div><dt>Score</dt><dd id="dScore">0</dd></div>
+      </dl>
+      <p class="brief"><span class="label">Night <b id="dNext">2</b></span><span id="dBrief"></span></p>
+      <button class="go" id="bNext" type="button">Keep the light</button>
+    </div>
+  </section>
+
+  <section class="veil" id="vOver" aria-labelledby="oHead" hidden>
+    <div class="sheet">
+      <div class="eyebrow">The log ends here</div>
+      <h2 id="oHead">Three ships lost</h2>
+      <p class="log" id="oLog"></p>
+      <dl class="stats">
+        <div><dt>Score</dt><dd id="oScore">0</dd></div>
+        <div><dt>Nights kept</dt><dd id="oNights">0</dd></div>
+        <div><dt>Ships through</dt><dd id="oThrough">0</dd></div>
+        <div><dt>Best</dt><dd id="oBest">0</dd></div>
+      </dl>
+      <button class="go" id="bAgain" type="button">Relight the lamp</button>
+    </div>
+  </section>
+
+  <section class="veil" id="vPause" aria-labelledby="pHead" hidden>
+    <div class="sheet">
+      <div class="eyebrow">The watch is paused</div>
+      <h2 id="pHead">Lamp shuttered</h2>
+      <button class="go" id="bResume" type="button">Back to the watch</button>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+'use strict';
+const TAU = Math.PI * 2;
+const $ = id => document.getElementById(id);
+const stage = $('stage'), cv = $('sea'), ctx = cv.getContext('2d');
+const lit = document.createElement('canvas'), lx = lit.getContext('2d');
+const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const hasConic = typeof ctx.createConicGradient === 'function';
+
+const AREA = 760000;   // the strait always covers the same area of water, whatever the screen shape
+const HA = 0.2;        // half-angle of the beam, radians
+const ISLE = 44;       // radius of the rock the lighthouse stands on
+let W = 1160, H = 655, S = 1, DPR = 1, LX = 580, LY = 327, horiz = true, L = W, B = H, FAR = 700, inited = false;
+
+const rand = (a, b) => a + Math.random() * (b - a);
+const pick = a => a[(Math.random() * a.length) | 0];
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const angDiff = (a, b) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+const toXY = (u, v) => horiz ? { x: u, y: v } : { x: v, y: u };
+const laneAngle = dir => horiz ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? Math.PI / 2 : -Math.PI / 2);
+const fmt = n => Math.round(n).toLocaleString('en-US');
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } },
+  set(k, v){ try { localStorage.setItem(k, v); } catch (e) {} }
+};
+
+const G = {
+  mode: 'title', paused: false, t: 0, day: 0, amb: 0, flash: 0, shake: 0, ending: 0,
+  night: 0, score: 0, lives: 3, streak: 0, through: 0, burned: 0,
+  nThrough: 0, nLost: 0, nBurned: 0, total: 0, toSpawn: 0, spawnT: 1, spawnEvery: 5,
+  wraithT: 0, wraithEvery: 9, wraithMax: 0, dir: 1, restored: false,
+  flares: 0, flareT: 0, blackout: 0, dawnT: 0,
+  beam: -1.1, beamVel: 0, target: -1.1, auto: true,
+  ships: [], rocks: [], wraiths: [], sleepers: [], parts: [], floats: [], rings: [], pips: []
+};
+let best = +store.get('skerrow.best', 0) || 0;
+const ISLAND = { x: LX, y: LY, r: ISLE };
+const keys = { l: false, r: false };
+
+/* ---------- sound: everything is synthesised, nothing is loaded ---------- */
+const Snd = (() => {
+  let ac = null, out = null, nb = null, muted = store.get('skerrow.mute', '0') === '1';
+  const cd = {};
+  const ok = (k, gap) => { if (!ac) return false; const t = ac.currentTime; if (cd[k] !== undefined && t - cd[k] < gap) return false; cd[k] = t; return true; };
+  function init(){
+    if (ac){ if (ac.state === 'suspended') ac.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+    try { ac = new AC(); } catch (e) { ac = null; return; }
+    out = ac.createGain(); out.gain.value = muted ? 0 : .9;
+    const comp = ac.createDynamicsCompressor(); out.connect(comp); comp.connect(ac.destination);
+    nb = ac.createBuffer(1, ac.sampleRate * 3, ac.sampleRate);
+    const d = nb.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    // the sea: low noise that swells and falls
+    const s = ac.createBufferSource(); s.buffer = nb; s.loop = true;
+    const f = ac.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 380;
+    const g = ac.createGain(); g.gain.value = .075;
+    const l = ac.createOscillator(), lg = ac.createGain(); l.frequency.value = .13; lg.gain.value = .045;
+    l.connect(lg); lg.connect(g.gain); s.connect(f); f.connect(g); g.connect(out); s.start(); l.start();
+  }
+  function tone(f, t, vol, o){
+    if (!ac) return; o = o || {};
+    const t0 = ac.currentTime + (o.at || 0), osc = ac.createOscillator(), g = ac.createGain();
+    osc.type = o.type || 'sine'; osc.frequency.setValueAtTime(f, t0);
+    if (o.to) osc.frequency.exponentialRampToValueAtTime(o.to, t0 + t);
+    g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + (o.atk || .008)); g.gain.exponentialRampToValueAtTime(.0001, t0 + t);
+    let node = osc;
+    if (o.lp){ const fl = ac.createBiquadFilter(); fl.type = 'lowpass'; fl.frequency.value = o.lp; osc.connect(fl); node = fl; }
+    node.connect(g); g.connect(out); osc.start(t0); osc.stop(t0 + t + .05);
+  }
+  function noise(t, vol, f, o){
+    if (!ac) return; o = o || {};
+    const t0 = ac.currentTime + (o.at || 0), s = ac.createBufferSource(), fl = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = nb; fl.type = o.type || 'bandpass'; fl.Q.value = o.q || 1; fl.frequency.setValueAtTime(f, t0);
+    if (o.to) fl.frequency.exponentialRampToValueAtTime(o.to, t0 + t);
+    g.gain.setValueAtTime(.0001, t0); g.gain.exponentialRampToValueAtTime(vol, t0 + (o.atk || .01)); g.gain.exponentialRampToValueAtTime(.0001, t0 + t);
+    s.connect(fl); fl.connect(g); g.connect(out); s.start(t0, Math.random() * 2); s.stop(t0 + t + .05);
+  }
+  return {
+    init,
+    get muted(){ return muted; },
+    setMuted(m){ muted = m; store.set('skerrow.mute', m ? '1' : '0'); if (out) out.gain.setTargetAtTime(m ? 0 : .9, ac.currentTime, .03); },
+    bell(){ if (!ok('bell', .4)) return; tone(1244, .9, .1); tone(1866, .5, .05); tone(2960, .25, .025); },
+    chime(n){ const b = 523 * Math.pow(2, (Math.min(n, 5) - 1) / 6); tone(b, .5, .12, { type: 'triangle' }); tone(b * 1.5, .75, .1, { type: 'triangle', at: .09 }); },
+    hiss(){ if (!ok('hiss', .16)) return; noise(.22, .05, 3000, { to: 6000, q: .8 }); },
+    wail(){ tone(900, .55, .07, { to: 180, type: 'sawtooth', lp: 1800 }); noise(.5, .08, 2500, { to: 7000 }); },
+    wreck(){ tone(110, .7, .35, { to: 38 }); noise(.55, .3, 900, { to: 150, type: 'lowpass' }); },
+    horn(){ tone(98, 1.7, .16, { type: 'sawtooth', lp: 420, atk: .14 }); tone(147, 1.7, .09, { type: 'sawtooth', lp: 420, atk: .14 }); },
+    roar(){ tone(70, 1.4, .3, { to: 34, type: 'sawtooth', lp: 300, atk: .05 }); noise(1.2, .16, 200, { to: 80, type: 'lowpass' }); },
+    rumble(){ if (!ok('rumble', .45)) return; tone(46, .5, .14, { atk: .1 }); },
+    flare(){ noise(.6, .2, 700, { to: 5000 }); tone(1400, .9, .06, { to: 500, at: .25 }); },
+    snuff(){ tone(330, .9, .16, { to: 60, type: 'triangle' }); },
+    relit(){ tone(220, .4, .1, { to: 660, type: 'triangle' }); },
+    dawn(){ [392, 494, 587, 784].forEach((f, i) => tone(f, 1.4, .08, { type: 'triangle', at: i * .16 })); },
+    over(){ [330, 262, 196, 147].forEach((f, i) => tone(f, 1.3, .1, { type: 'triangle', at: i * .28 })); }
+  };
+})();
+
+/* ---------- world set-up ---------- */
+const waves = Array.from({ length: 110 }, () => ({ u: Math.random(), v: Math.random(), len: rand(10, 26), ph: rand(0, TAU), sp: rand(.5, 1.2) }));
+const islePts = crag(ISLE, 13, .8, .32);
+
+function crag(r, n, lo, span){
+  const pts = [];
+  for (let i = 0; i < n; i++){ const a = i / n * TAU, rr = r * (lo + Math.random() * span); pts.push([Math.cos(a) * rr, Math.sin(a) * rr]); }
+  return pts;
+}
+function poly(c, pts, k){ c.moveTo(pts[0][0] * k, pts[0][1] * k); for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0] * k, pts[i][1] * k); c.closePath(); }
+function blob(c, pts, k){
+  const n = pts.length, p0 = pts[n - 1], p1 = pts[0];
+  c.moveTo((p0[0] + p1[0]) / 2 * k, (p0[1] + p1[1]) / 2 * k);
+  for (let i = 0; i < n; i++){ const a = pts[i], b = pts[(i + 1) % n]; c.quadraticCurveTo(a[0] * k, a[1] * k, (a[0] + b[0]) / 2 * k, (a[1] + b[1]) / 2 * k); }
+  c.closePath();
+}
+
+function resize(){
+  const r = stage.getBoundingClientRect();
+  const cw = Math.max(240, r.width), ch = Math.max(240, r.height);
+  let dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const px = cw * ch * dpr * dpr; if (px > 2.4e6) dpr *= Math.sqrt(2.4e6 / px);
+  const oW = W, oH = H, oHoriz = horiz;
+  DPR = dpr; S = Math.sqrt(cw * ch / AREA); W = cw / S; H = ch / S;
+  const pw = Math.round(cw * dpr), ph = Math.round(ch * dpr);
+  if (cv.width !== pw || cv.height !== ph){ cv.width = lit.width = pw; cv.height = lit.height = ph; }
+  LX = W / 2; LY = H / 2; horiz = W >= H; L = horiz ? W : H; B = horiz ? H : W; FAR = Math.hypot(W, H) / 2 + 30;
+  ISLAND.x = LX; ISLAND.y = LY;
+  if (inited && (Math.abs(oW - W) > .5 || Math.abs(oH - H) > .5)){
+    const kx = W / oW, ky = H / oH;
+    for (const list of [G.ships, G.rocks, G.wraiths, G.sleepers, G.parts, G.floats, G.rings]) for (const e of list){ e.x *= kx; e.y *= ky; }
+    for (const s of G.ships){ s.trail.length = 0; if (oHoriz !== horiz){ s.lane = laneAngle(s.dir); s.a = s.lane; } }
+  }
+  inited = true;
+}
+
+function makeRocks(n){
+  G.rocks = [];
+  let tries = 0;
+  while (G.rocks.length < n && tries++ < 900){
+    const r = rand(24, 40), p = toXY(rand(L * .17, L * .83), rand(r + 56, B - r - 56));
+    if (Math.hypot(p.x - LX, p.y - LY) < ISLE + r + 72) continue;
+    if (G.rocks.some(o => Math.hypot(o.x - p.x, o.y - p.y) < o.r + r + 82)) continue;
+    G.rocks.push({ x: p.x, y: p.y, r, pts: crag(r, 9 + ((Math.random() * 4) | 0), .78, .34), seed: rand(0, TAU) });
+  }
+}
+
+/* ---------- light ---------- */
+function isLit(x, y, r){
+  if (G.flareT > 0) return true;
+  if (G.blackout > 0) return false;
+  const dx = x - LX, dy = y - LY, d = Math.hypot(dx, dy);
+  if (d < 2) return true;
+  return Math.abs(angDiff(Math.atan2(dy, dx), G.beam)) < HA + Math.asin(Math.min(1, r / d)) * .8;
+}
+
+/* ---------- ships ---------- */
+function spawnShip(){
+  const dir = G.night >= 5 ? (Math.random() < .5 ? 1 : -1) : G.dir;
+  const big = G.night >= 3 && Math.random() < .3;
+  const r = big ? 13 : 9;
+  let v = rand(36, B - 36);
+  if (G.rocks.length && Math.random() < .78){
+    const o = pick(G.night > 1 ? G.rocks.concat([ISLAND]) : G.rocks);
+    v = (horiz ? o.y : o.x) + rand(-.7, .7) * o.r;
+  }
+  for (const s of G.ships){
+    const sv = horiz ? s.y : s.x, su = horiz ? s.x : s.y;
+    if (s.dir === dir && Math.abs(su - (dir > 0 ? 0 : L)) < 110 && Math.abs(sv - v) < 36) v += v < B / 2 ? 48 : -48;
+  }
+  v = clamp(v, 30, B - 30);
+  const p = toXY(dir > 0 ? -26 : L + 26, v), a = laneAngle(dir);
+  let pip = -1;
+  if (G.mode === 'play'){ pip = G.pips.indexOf('wait'); if (pip >= 0) setPip(pip, 'sea'); }
+  G.ships.push({ x: p.x, y: p.y, a, lane: a, dir, r, big, speed: big ? 30 : rand(38, 45), lit: false, hunted: false, dead: false, peril: 0, bellT: 0, trail: [], trailT: 0, bob: rand(0, TAU), bias: Math.random() < .5 ? 1 : -1, pip });
+}
+
+function updShip(s, dt){
+  const demo = G.mode === 'title';
+  s.lit = isLit(s.x, s.y, s.r);
+  const sees = s.lit || demo;
+  const ux = Math.cos(s.lane), uy = Math.sin(s.lane), fx = Math.cos(s.a), fy = Math.sin(s.a);
+  let want = s.lane, slow = 1, peril = false, bestA = 0;
+  for (let i = -1; i < G.rocks.length; i++){
+    const o = i < 0 ? ISLAND : G.rocks[i];
+    const dx = o.x - s.x, dy = o.y - s.y, hitR = o.r * .84 + s.r * .7;
+    if (dx * dx + dy * dy < hitR * hitR){
+      if (demo){ s.dead = true; return; }
+      loseShip(s, i < 0 ? 'Wrecked on the Skerrow' : 'Lost on the rocks'); return;
+    }
+    if (sees){
+      // steering is worked out along the ship's lane, so once she has stepped clear she simply sails on past
+      const ahead = dx * ux + dy * uy, cr = ux * dy - uy * dx, clear = o.r + s.r + 18;
+      if (ahead > -o.r * .6 && ahead < 170 + o.r && Math.abs(cr) < clear){
+        const ang = Math.min(1.2, Math.atan2(clear - Math.abs(cr) + 8, Math.max(18, ahead - o.r * .5)) * 1.5 + .12);
+        if (ang > bestA){
+          bestA = ang;
+          want = s.lane + (cr > 1 ? -1 : cr < -1 ? 1 : s.bias) * ang;
+          slow = ahead < o.r + 70 ? .6 : 1;
+        }
+      }
+    } else {
+      const ahead = dx * fx + dy * fy, cr = fx * dy - fy * dx;
+      if (ahead > 0 && ahead < s.speed * 4.4 + o.r && Math.abs(cr) < hitR) peril = true;
+    }
+  }
+  if (!demo && (peril || s.hunted) && !s.lit){
+    s.peril = Math.min(1, s.peril + dt * 5);
+    s.bellT -= dt; if (s.bellT <= 0){ Snd.bell(); s.bellT = 1; }
+  } else { s.peril = Math.max(0, s.peril - dt * 3); s.bellT = 0; }
+  s.hunted = false;
+  const rate = sees ? 1.7 : .75;
+  s.a += clamp(angDiff(want, s.a), -rate * dt, rate * dt);
+  const v = s.speed * slow;
+  s.x += Math.cos(s.a) * v * dt; s.y += Math.sin(s.a) * v * dt;
+  if (horiz) s.y = clamp(s.y, 20, H - 20); else s.x = clamp(s.x, 20, W - 20);
+  s.trailT -= dt;
+  if (s.trailT <= 0){ s.trailT = .13; s.trail.push({ x: s.x - Math.cos(s.a) * s.r * 1.4, y: s.y - Math.sin(s.a) * s.r * 1.4 }); if (s.trail.length > 12) s.trail.shift(); }
+  const u = horiz ? s.x : s.y;
+  if ((s.dir > 0 && u > L + 28) || (s.dir < 0 && u < -28)){ s.dead = true; if (!demo) shipThrough(s); }
+}
+
+function shipThrough(s){
+  G.streak++;
+  const mult = Math.min(5, G.streak), pts = (s.big ? 200 : 100) * mult;
+  G.score += pts; G.through++; G.nThrough++;
+  if (s.pip >= 0) setPip(s.pip, 'ok');
+  const x = clamp(s.x, 46, W - 46), y = clamp(s.y, 60, H - 70);
+  G.floats.push({ x, y, text: '+' + pts, life: 1.5, col: '255,230,163' });
+  burst(x, y, 10, '255,230,163', 60, .8, 2.2);
+  Snd.chime(mult);
+}
+
+function loseShip(s, why){
+  if (s.dead) return;
+  s.dead = true; G.lives--; G.streak = 0; G.nLost++;
+  if (s.pip >= 0) setPip(s.pip, 'lost');
+  G.shake = 1;
+  burst(s.x, s.y, 22, '255,150,110', 120, .9, 2.6);
+  burst(s.x, s.y, 14, '230,242,236', 70, 1.2, 2);
+  G.rings.push({ x: s.x, y: s.y, t: 0, max: 1.1, r0: 8, r1: 78, col: '255,107,87' });
+  Snd.wreck(); toast(why, true);
+  if (G.lives <= 0) G.ending = 1.9;
+}
+
+/* ---------- the Drowned ---------- */
+function spawnWraith(){
+  for (let i = 0; i < 24; i++){
+    const x = rand(30, W - 30), y = rand(30, H - 30);
+    if (Math.hypot(x - LX, y - LY) < 200 || isLit(x, y, 30)) continue;
+    if (G.ships.some(s => Math.hypot(s.x - x, s.y - y) < 175)) continue;
+    G.wraiths.push({ x, y, a: Math.atan2(LY - y, LX - x), hp: 1, emerge: 1.5, lit: false, dead: false, ph: rand(0, TAU), speed: Math.min(62, 45 + G.night * 1.6) });
+    return;
+  }
+}
+
+function updWraith(w, dt){
+  if (w.emerge > 0){ w.emerge -= dt; return; }
+  w.lit = isLit(w.x, w.y, 12);
+  if (w.lit){
+    w.hp -= dt / .8;
+    if (Math.random() < dt * 34) G.parts.push({ x: w.x + rand(-8, 8), y: w.y + rand(-8, 8), vx: rand(-14, 14), vy: rand(-34, -10), life: .7, max: .7, size: rand(1.5, 3.2), col: '220,255,240' });
+    Snd.hiss();
+    if (w.hp <= 0) burn(w, false);
+    return;
+  }
+  w.hp = Math.min(1, w.hp + dt * .12);
+  let tgt = null, bd = 1e9;
+  for (const s of G.ships){ if (s.dead) continue; const d = Math.hypot(s.x - w.x, s.y - w.y); if (d < bd){ bd = d; tgt = s; } }
+  let tx = LX, ty = LY;
+  if (tgt){
+    const lead = Math.min(1.2, bd / w.speed) * .6;
+    tx = tgt.x + Math.cos(tgt.a) * tgt.speed * lead; ty = tgt.y + Math.sin(tgt.a) * tgt.speed * lead;
+    if (bd < 140) tgt.hunted = true;
+    if (bd < tgt.r + 11){
+      w.dead = true; loseShip(tgt, 'Dragged under');
+      G.rings.push({ x: w.x, y: w.y, t: 0, max: .9, r0: 6, r1: 50, col: '157,255,207' });
+      return;
+    }
+  } else if (Math.hypot(LX - w.x, LY - w.y) < ISLE + 8){ w.dead = true; snuff(3.2); return; }
+  w.a += clamp(angDiff(Math.atan2(ty - w.y, tx - w.x), w.a), -3 * dt, 3 * dt);
+  const wob = Math.sin(G.t * 3 + w.ph) * .25;
+  w.x += Math.cos(w.a + wob) * w.speed * dt; w.y += Math.sin(w.a + wob) * w.speed * dt;
+}
+
+function burn(w, sunrise){
+  if (w.dead) return;
+  w.dead = true;
+  burst(w.x, w.y, 16, '220,255,240', 80, .8, 2.4);
+  G.rings.push({ x: w.x, y: w.y, t: 0, max: .7, r0: 6, r1: 44, col: '220,255,240' });
+  if (sunrise) return;
+  G.score += 20; G.burned++; G.nBurned++;
+  G.floats.push({ x: w.x, y: w.y - 14, text: '+20', life: 1.1, col: '157,255,207' });
+  Snd.wail();
+}
+
+function snuff(sec){
+  G.blackout = Math.max(G.blackout, sec); G.shake = .8;
+  burst(LX, LY, 20, '157,255,207', 90, .9, 2.4);
+  Snd.snuff(); toast('The lamp is out', true);
+}
+
+/* ---------- the Sleeper ---------- */
+function newSleeper(){
+  const z = { x: 0, y: 0, r: 50, a: 0, vx: 0, vy: 0, wake: 0, fade: 0, state: 'rise', t: 0, target: null, lit: false, ph: rand(0, TAU), pts: crag(50, 14, .86, .24).map(p => [p[0] * 1.35, p[1] * .82]) };
+  placeSleeper(z);
+  return z;
+}
+function placeSleeper(z){
+  for (let i = 0; i < 40; i++){
+    const p = toXY(rand(L * .22, L * .78), rand(95, B - 95));
+    if (Math.hypot(p.x - LX, p.y - LY) < 215) continue;
+    if (i < 30 && isLit(p.x, p.y, 60)) continue;
+    z.x = p.x; z.y = p.y; break;
+  }
+  const along = (Math.random() < .5 ? 1 : -1) * rand(7, 11), across = rand(-3, 3);
+  z.vx = horiz ? along : across; z.vy = horiz ? across : along;
+  z.a = Math.atan2(z.vy, z.vx); z.wake = 0; z.fade = 0; z.state = 'rise'; z.target = null;
+}
+function updSleeper(z, dt){
+  if (z.state === 'gone'){ z.t -= dt; if (z.t <= 0) placeSleeper(z); return; }
+  if (z.state === 'dive'){ z.fade -= dt; if (z.fade <= 0){ z.fade = 0; z.state = 'gone'; z.t = rand(5, 8); } return; }
+  if (z.state === 'rise'){ z.fade = Math.min(1, z.fade + dt / 1.5); if (z.fade >= 1) z.state = 'sleep'; }
+  if (z.state === 'charge'){
+    z.t -= dt;
+    if (!z.target || z.target.dead){
+      z.target = null; let bd = 1e9;
+      for (const s of G.ships){ if (s.dead) continue; const d = Math.hypot(s.x - z.x, s.y - z.y); if (d < bd){ bd = d; z.target = s; } }
+    }
+    const tx = z.target ? z.target.x : LX, ty = z.target ? z.target.y : LY, d = Math.hypot(tx - z.x, ty - z.y);
+    z.a += clamp(angDiff(Math.atan2(ty - z.y, tx - z.x), z.a), -5 * dt, 5 * dt);
+    z.x += Math.cos(z.a) * 165 * dt; z.y += Math.sin(z.a) * 165 * dt;
+    if (Math.random() < dt * 40) G.parts.push({ x: z.x + rand(-30, 30), y: z.y + rand(-30, 30), vx: rand(-20, 20), vy: rand(-20, 20), life: .6, max: .6, size: rand(2, 4), col: '230,242,236' });
+    if (z.target && d < z.r * .6 + z.target.r){ loseShip(z.target, 'Taken by the Sleeper'); z.state = 'dive'; }
+    else if (!z.target && d < ISLE + z.r * .5){ snuff(4.5); z.state = 'dive'; }
+    else if (z.t <= 0) z.state = 'dive';
+    return;
+  }
+  z.x += z.vx * dt; z.y += z.vy * dt;
+  if ((z.x < 90 && z.vx < 0) || (z.x > W - 90 && z.vx > 0)) z.vx = -z.vx;
+  if ((z.y < 90 && z.vy < 0) || (z.y > H - 90 && z.vy > 0)) z.vy = -z.vy;
+  const dl = Math.hypot(z.x - LX, z.y - LY);
+  if (dl < 190){ z.vx = (z.x - LX) / dl * 10; z.vy = (z.y - LY) / dl * 10; }
+  z.a += clamp(angDiff(Math.atan2(z.vy, z.vx), z.a), -dt, dt);
+  if (z.state !== 'sleep') return;
+  z.lit = isLit(z.x, z.y, z.r * .7);
+  z.wake = clamp(z.wake + (z.lit ? dt / 2.3 : -dt * .22), 0, 1);
+  if (z.lit) Snd.rumble();
+  if (z.wake >= 1){ z.state = 'charge'; z.t = 3.6; z.target = null; G.shake = 1; Snd.roar(); toast('The Sleeper wakes', true); }
+}
+
+/* ---------- small effects ---------- */
+function burst(x, y, n, col, spd, life, size){
+  for (let i = 0; i < n; i++){
+    const a = rand(0, TAU), v = rand(.25, 1) * spd, l = life * rand(.6, 1);
+    G.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: l, max: l, size: size * rand(.6, 1.3), col });
+  }
+}
+const toastEl = $('toast');
+function toast(msg, bad){
+  toastEl.textContent = msg; toastEl.className = 'toast' + (bad ? ' bad' : '');
+  void toastEl.offsetWidth; toastEl.classList.add('on');
+}
+
+/* ---------- the run ---------- */
+function briefing(n){
+  if (n === 1) return 'Ships are crossing the strait. In the dark they hold their course, rocks or no rocks. Put the light on a ship and it steers clear.';
+  if (n === 2) return 'The Drowned are rising. They hunt ships and move only in the dark. Hold the light on one until it burns. If one reaches your rock, the lamp goes out for a while.';
+  if (n === 3) return 'Barques tonight. They are slow and wide, and worth double.';
+  if (n === 4) return 'Something large sleeps in the strait. Light wakes it, and it wakes hungry. Keep the beam off the Sleeper.';
+  if (n === 5) return 'Traffic runs both ways tonight.';
+  if (n === 8) return 'A second Sleeper has drifted in.';
+  return pick(['More sail tonight, and the Drowned come quicker.', 'The tide has moved the rocks again.', 'A long night ahead. Spend the flare when you need it.']);
+}
+
+function newRun(){
+  G.score = 0; G.lives = 3; G.streak = 0; G.through = 0; G.burned = 0;
+  startNight(1);
+}
+
+function startNight(n){
+  G.night = n; G.mode = 'play'; G.paused = false; G.ending = 0;
+  G.ships = []; G.wraiths = []; G.sleepers = []; G.rings = [];
+  makeRocks(Math.min(5 + n, 11));
+  G.total = Math.min(4 + n, 14); G.toSpawn = G.total; G.spawnT = 1.6; G.spawnEvery = Math.max(2.3, 5.4 - n * .34);
+  G.wraithEvery = Math.max(2.4, 8.4 - n * .7); G.wraithT = 4; G.wraithMax = Math.min(7, 1 + Math.ceil(n / 1.5));
+  if (n >= 4) G.sleepers.push(newSleeper());
+  if (n >= 8) G.sleepers.push(newSleeper());
+  G.flares = 1; G.flareT = 0; G.blackout = 0; G.nThrough = G.nLost = G.nBurned = 0; G.restored = false;
+  G.dir = Math.random() < .5 ? 1 : -1; G.auto = false;
+  G.pips = Array(G.total).fill('wait');
+  hPips.innerHTML = G.pips.map(() => '<i class="pip"></i>').join('');
+  show(null); Snd.horn(); toast('Night ' + n);
+}
+function setPip(i, st){ G.pips[i] = st; const el = hPips.children[i]; if (el) el.className = 'pip ' + st; }
+
+function director(dt){
+  if (G.toSpawn > 0){
+    G.spawnT -= dt;
+    if (G.spawnT <= 0){ spawnShip(); G.toSpawn--; G.spawnT = G.spawnEvery * rand(.75, 1.25); }
+  } else if (!G.ships.length){ beginDawn(); return; }
+  if (G.night >= 2){
+    G.wraithT -= dt;
+    if (G.wraithT <= 0){ if (G.wraiths.length < G.wraithMax) spawnWraith(); G.wraithT = G.wraithEvery * rand(.7, 1.3); }
+  }
+}
+
+function fireFlare(){
+  if (G.mode !== 'play' || G.paused || G.ending > 0 || G.flares <= 0 || G.flareT > 0) return;
+  G.flares--; G.flareT = 2.8; G.flash = 1;
+  burst(LX, LY, 26, '255,240,200', 170, 1, 2.6);
+  Snd.flare();
+}
+
+function beginDawn(){
+  G.mode = 'dawn'; G.dawnT = 0; G.flareT = 0; G.blackout = 0;
+  G.score += 50 * G.night;
+  G.restored = G.nLost === 0 && G.lives < 3;
+  if (G.restored) G.lives++;
+  Snd.dawn(); toast(G.nLost === 0 ? 'A clean night' : 'Dawn');
+}
+
+function dawnCard(){
+  G.mode = 'card';
+  $('dEyebrow').textContent = 'Dawn';
+  $('dHead').textContent = 'Night ' + G.night + ' kept';
+  $('dLog').textContent = G.nLost === 0
+    ? 'Every ship came through.' + (G.restored ? ' A clean night forgives one lost ship.' : '')
+    : G.nThrough + ' came through. ' + G.nLost + (G.nLost === 1 ? ' was' : ' were') + ' lost in the dark.';
+  $('dThrough').textContent = G.nThrough + '/' + G.total;
+  $('dBurned').textContent = G.nBurned; $('dScore').textContent = fmt(G.score);
+  $('dNext').textContent = G.night + 1; $('dBrief').textContent = briefing(G.night + 1);
+  $('bNext').textContent = 'Keep the light';
+  show('vDawn');
+}
+
+function resumeCard(){
+  G.mode = 'card';
+  $('dEyebrow').textContent = 'Back on watch';
+  $('dHead').textContent = 'The lamp is waiting';
+  $('dLog').textContent = 'Trimmed, filled, and ready for night ' + (G.night + 1) + '.';
+  $('dThrough').textContent = G.through; $('dBurned').textContent = G.burned; $('dScore').textContent = fmt(G.score);
+  $('dNext').textContent = G.night + 1; $('dBrief').textContent = briefing(G.night + 1);
+  $('bNext').textContent = 'Light the lamp';
+  show('vDawn');
+}
+
+function gameOver(){
+  G.mode = 'over'; G.ending = 0;
+  const kept = G.night - 1, isBest = G.score > best && G.score > 0;
+  if (isBest){ best = G.score; store.set('skerrow.best', String(best)); }
+  $('oLog').textContent = (kept === 0 ? 'The first night is the hardest. Listen for the bells: a ringing ship is about to strike.'
+    : 'You kept the Skerrow light for ' + kept + (kept === 1 ? ' night.' : ' nights.')) + (isBest ? ' That is your best watch yet.' : '');
+  $('oScore').textContent = fmt(G.score); $('oNights').textContent = kept;
+  $('oThrough').textContent = G.through; $('oBest').textContent = fmt(best);
+  Snd.over(); show('vOver');
+}
+
+/* ---------- screens and readouts ---------- */
+const hud = $('hud'), hPips = $('hPips'), hHulls = $('hHulls'), hStreak = $('hStreak'), bFlare = $('bFlare'), bSound = $('bSound');
+const veils = ['vTitle', 'vDawn', 'vOver', 'vPause'].map($);
+function show(id){
+  for (const v of veils) v.hidden = v.id !== id;
+  hud.hidden = !(id === null || id === 'vPause');
+  if (id){ const b = $(id).querySelector('.go'); if (b) b.focus({ preventScroll: true }); }
+}
+const seen = {};
+function put(el, key, val){ if (seen[key] !== val){ seen[key] = val; el.textContent = val; } }
+function syncHud(){
+  if (hud.hidden) return;
+  put($('hNight'), 'n', String(G.night)); put($('hScore'), 's', fmt(G.score));
+  if (seen.l !== G.lives){
+    seen.l = G.lives;
+    hHulls.innerHTML = [0, 1, 2].map(i => '<svg class="hull' + (i < G.lives ? '' : ' gone') + '" viewBox="0 0 22 18" aria-hidden="true"><path d="M2 12h18l-3 5H5z"/><path d="M10.5 1v10H4z"/><path d="M12.5 4v7H18z"/></svg>').join('');
+    hHulls.setAttribute('aria-label', Math.max(0, G.lives) + ' of 3 ships left to lose');
+  }
+  put($('hFlare'), 'f', String(G.flares));
+  const spent = G.flares <= 0; if (seen.fd !== spent){ seen.fd = spent; bFlare.disabled = spent; }
+  const mult = Math.min(5, G.streak + 1), on = mult >= 2;
+  if (seen.st !== on){ seen.st = on; hStreak.hidden = !on; }
+  if (on) put($('hMult'), 'm', '×' + mult);
+}
+function setPaused(p){
+  if (G.mode !== 'play' || G.ending > 0) return;
+  G.paused = p; show(p ? 'vPause' : null);
+}
+
+/* ---------- one step of the world ---------- */
+function update(rdt){
+  let dt = rdt;
+  if (G.ending > 0){ G.ending -= rdt; dt = rdt * .35; if (G.ending <= 0){ gameOver(); return; } }
+  G.t += dt;
+
+  if (G.auto) G.target += rdt * (reduce ? .12 : .4);
+  if (keys.l !== keys.r){ G.auto = false; G.target = G.beam + (keys.r ? .6 : -.6); }
+  const want = clamp(angDiff(G.target, G.beam) * 9, -3.8, 3.8);
+  G.beamVel += (want - G.beamVel) * Math.min(1, rdt * 12);
+  G.beam += G.beamVel * rdt;
+
+  if (G.flareT > 0) G.flareT -= dt;
+  if (G.blackout > 0){ G.blackout -= dt; if (G.blackout <= 0){ G.blackout = 0; Snd.relit(); } }
+  G.flash = Math.max(0, G.flash - rdt * 2.5); G.shake = Math.max(0, G.shake - rdt * 2.2);
+  const dayT = (G.mode === 'dawn' || G.mode === 'card') ? 1 : 0;
+  G.day += clamp(dayT - G.day, -rdt / .8, rdt / 2.2);
+  G.amb = Math.max(G.day, G.flareT > 0 ? Math.min(1, G.flareT / .6) * .9 : 0);
+
+  if (G.mode === 'play'){ if (G.ending <= 0) director(dt); }
+  else if (G.mode === 'title'){
+    G.spawnT -= dt;
+    if (G.spawnT <= 0 && G.ships.length < 4){ spawnShip(); G.spawnT = rand(3.5, 6); }
+  } else if (G.mode === 'dawn'){
+    G.dawnT += dt;
+    for (const w of G.wraiths){ w.hp -= dt * 1.3; if (w.hp <= 0) burn(w, true); }
+    for (const z of G.sleepers) z.fade = Math.max(0, z.fade - dt);
+    if (G.dawnT > 2.6) dawnCard();
+  }
+  if (G.mode === 'play' || G.mode === 'title'){
+    for (const w of G.wraiths) if (!w.dead) updWraith(w, dt);
+    for (const z of G.sleepers) updSleeper(z, dt);
+    for (const s of G.ships) if (!s.dead) updShip(s, dt);
+  }
+  G.ships = G.ships.filter(s => !s.dead); G.wraiths = G.wraiths.filter(w => !w.dead);
+
+  for (const p of G.parts){ p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 1 - dt * 1.6; p.vy *= 1 - dt * 1.6; }
+  G.parts = G.parts.filter(p => p.life > 0);
+  for (const f of G.floats){ f.life -= dt; f.y -= dt * 22; }
+  G.floats = G.floats.filter(f => f.life > 0);
+  for (const r of G.rings) r.t += dt;
+  G.rings = G.rings.filter(r => r.t < r.max);
+}
+
+/* ---------- drawing: every thing has a night face and a lit face ---------- */
+function drawSea(c, on){
+  const g = c.createRadialGradient(LX, LY, 20, LX, LY, FAR);
+  if (on){ g.addColorStop(0, '#43aaa6'); g.addColorStop(.5, '#227c86'); g.addColorStop(1, '#17596d'); }
+  else { g.addColorStop(0, '#12354b'); g.addColorStop(.45, '#0b2434'); g.addColorStop(1, '#050f17'); }
+  c.fillStyle = g; c.fillRect(-20, -20, W + 40, H + 40);
+}
+function drawWaves(c, on){
+  c.lineCap = 'round'; c.lineWidth = on ? 1.6 : 1.2;
+  for (const w of waves){
+    const tw = reduce ? .6 : .5 + .5 * Math.sin(G.t * w.sp + w.ph);
+    const x = w.u * W + (reduce ? 0 : Math.sin(G.t * .25 + w.ph) * 8), y = w.v * H;
+    c.strokeStyle = on ? 'rgba(215,245,236,' + (.12 + .4 * tw).toFixed(3) + ')' : 'rgba(150,190,210,' + (.03 + .07 * tw).toFixed(3) + ')';
+    c.beginPath(); c.moveTo(x - w.len / 2, y); c.quadraticCurveTo(x, y - w.len * .22, x + w.len / 2, y); c.stroke();
+  }
+}
+function drawRock(c, o, on){
+  c.save(); c.translate(o.x, o.y);
+  const pulse = 1.2 + (reduce ? 0 : .05 * Math.sin(G.t * 1.3 + o.seed));
+  c.beginPath(); poly(c, o.pts, pulse); c.fillStyle = on ? 'rgba(235,250,245,.4)' : 'rgba(170,205,220,.07)'; c.fill();
+  c.beginPath(); poly(c, o.pts, 1);
+  if (on){
+    const a = Math.atan2(LY - o.y, LX - o.x), cx = Math.cos(a) * o.r, cy = Math.sin(a) * o.r;
+    const g = c.createLinearGradient(cx, cy, -cx, -cy);
+    g.addColorStop(0, '#c2bdac'); g.addColorStop(.55, '#74766f'); g.addColorStop(1, '#3d4447');
+    c.fillStyle = g; c.fill();
+    c.beginPath(); poly(c, o.pts, .55); c.fillStyle = 'rgba(255,255,255,.09)'; c.fill();
+  } else {
+    c.fillStyle = '#16303f'; c.fill(); c.strokeStyle = 'rgba(150,185,205,.3)'; c.lineWidth = 1.2; c.stroke();
+  }
+  c.restore();
+}
+function hull(c, r){
+  c.beginPath(); c.moveTo(r * 2, 0);
+  c.quadraticCurveTo(r * .9, r * .95, -r * 1.3, r * .7);
+  c.lineTo(-r * 1.55, 0); c.lineTo(-r * 1.3, -r * .7);
+  c.quadraticCurveTo(r * .9, -r * .95, r * 2, 0); c.closePath();
+}
+function drawShip(c, s, on){
+  const n = s.trail.length;
+  for (let i = 0; i < n; i++){
+    const p = s.trail[i], al = (i + 1) / n;
+    c.fillStyle = on ? 'rgba(235,250,245,' + (.3 * al).toFixed(3) + ')' : 'rgba(160,200,215,' + (.05 * al).toFixed(3) + ')';
+    c.beginPath(); c.arc(p.x, p.y, s.r * (.3 + .55 * (1 - al)), 0, TAU); c.fill();
+  }
+  c.save(); c.translate(s.x, s.y); c.rotate(s.a + (reduce ? 0 : Math.sin(G.t * 1.7 + s.bob) * .04));
+  hull(c, s.r);
+  if (on){
+    c.fillStyle = '#6e4226'; c.fill();
+    c.save(); c.scale(.72, .64); hull(c, s.r); c.fillStyle = '#c79a63'; c.fill(); c.restore();
+    c.fillStyle = '#f6efdc'; c.strokeStyle = 'rgba(60,40,20,.5)'; c.lineWidth = .8;
+    for (const k of (s.big ? [.85, -.45] : [.25])){
+      const mx = k * s.r;
+      c.beginPath(); c.moveTo(mx, -s.r * 1.15); c.quadraticCurveTo(mx + s.r * .8, 0, mx, s.r * 1.15); c.quadraticCurveTo(mx + s.r * .2, 0, mx, -s.r * 1.15);
+      c.fill(); c.stroke();
+    }
+  } else {
+    c.fillStyle = '#1d3547'; c.fill(); c.strokeStyle = 'rgba(160,195,215,.28)'; c.lineWidth = 1; c.stroke();
+  }
+  c.restore();
+  if (!on){
+    // every ship carries a lantern you can see in the dark; it turns red when she is about to strike
+    const hot = s.peril > .05, col = hot ? '255,107,87' : '255,214,130';
+    const rr = hot ? 12 + 6 * Math.abs(Math.sin(G.t * 8)) : 10 + Math.sin(G.t * 3 + s.bob);
+    const g = c.createRadialGradient(s.x, s.y, 0, s.x, s.y, rr);
+    g.addColorStop(0, 'rgba(' + col + ',.95)'); g.addColorStop(.25, 'rgba(' + col + ',.45)'); g.addColorStop(1, 'rgba(' + col + ',0)');
+    c.fillStyle = g; c.beginPath(); c.arc(s.x, s.y, rr, 0, TAU); c.fill();
+  }
+}
+function drawWraith(c, w, on){
+  if (w.emerge > 0){
+    const k = 1 - w.emerge / 1.5;
+    c.lineWidth = 1.3; c.strokeStyle = on ? 'rgba(230,255,245,' + (.7 * (1 - k * .5)).toFixed(3) + ')' : 'rgba(157,255,207,' + (.34 * (1 - k * .4)).toFixed(3) + ')';
+    for (let i = 0; i < 2; i++){ c.beginPath(); c.arc(w.x, w.y, 5 + ((k * 30 + i * 13) % 26), 0, TAU); c.stroke(); }
+    return;
+  }
+  const heat = 1 - Math.max(0, w.hp), j = w.lit && !reduce ? (Math.random() - .5) * 4 * (.3 + heat) : 0;
+  c.save(); c.translate(w.x + j, w.y - j * .6); c.rotate(w.a);
+  if (on){
+    c.fillStyle = 'rgba(' + ((200 + 55 * heat) | 0) + ',255,' + ((225 + 30 * heat) | 0) + ',' + (.5 + .45 * heat).toFixed(3) + ')';
+    for (let i = 0; i < 4; i++){
+      c.beginPath();
+      c.arc(-i * 8 + Math.sin(G.t * 6 + w.ph + i) * 1.5, Math.sin(G.t * 4 + w.ph + i * 1.3) * (1 + i), (11 - i * 2.2) * (1 - heat * .3), 0, TAU);
+      c.fill();
+    }
+    c.fillStyle = '#05212a'; c.beginPath(); c.arc(3, -3.6, 2, 0, TAU); c.moveTo(5, 3.6); c.arc(3, 3.6, 2, 0, TAU); c.fill();
+  } else {
+    c.fillStyle = 'rgba(120,200,180,.08)'; c.beginPath(); c.arc(-4, 0, 13, 0, TAU); c.fill();
+    c.shadowColor = '#9dffcf'; c.shadowBlur = 9 * DPR * S; c.fillStyle = '#9dffcf';
+    c.beginPath(); c.arc(3, -3.6, 1.8, 0, TAU); c.moveTo(4.8, 3.6); c.arc(3, 3.6, 1.8, 0, TAU); c.fill();
+  }
+  c.restore();
+}
+function drawSleeper(c, z, on){
+  if (z.state === 'gone' || z.fade <= 0) return;
+  c.save(); c.translate(z.x, z.y); c.rotate(z.a); c.globalAlpha = z.fade;
+  c.beginPath(); blob(c, z.pts, 1 + (reduce ? 0 : Math.sin(G.t * 1.1 + z.ph) * .03));
+  if (on){
+    const g = c.createRadialGradient(0, 0, 4, 0, 0, z.r * 1.3);
+    g.addColorStop(0, '#8672a6'); g.addColorStop(1, '#3b2f52'); c.fillStyle = g; c.fill();
+  } else {
+    c.fillStyle = 'rgba(46,36,70,.88)'; c.fill(); c.strokeStyle = 'rgba(190,160,235,.34)'; c.lineWidth = 1.4; c.stroke();
+  }
+  const open = z.state === 'charge' ? 1 : z.wake, ew = z.r * .46, eh = Math.max(.9, z.r * .26 * open);
+  c.beginPath(); c.moveTo(-ew, 0); c.quadraticCurveTo(0, -eh * 2, ew, 0); c.quadraticCurveTo(0, eh * 2, -ew, 0);
+  if (open > .08){
+    c.fillStyle = on ? '#f6ecc9' : 'rgba(246,236,201,.8)'; c.fill();
+    c.save(); c.clip();
+    c.beginPath(); c.arc(0, 0, z.r * .17, 0, TAU); c.fillStyle = '#ff6b57'; c.fill();
+    c.beginPath(); c.ellipse(0, 0, z.r * .04, z.r * .15, 0, 0, TAU); c.fillStyle = '#1a0d12'; c.fill();
+    c.restore();
+  } else { c.strokeStyle = on ? 'rgba(20,10,30,.85)' : 'rgba(255,107,87,.6)'; c.lineWidth = 1.6; c.stroke(); }
+  c.restore();
+}
+function drawScene(c, on){
+  drawSea(c, on); drawWaves(c, on);
+  for (const z of G.sleepers) drawSleeper(c, z, on);
+  for (const o of G.rocks) drawRock(c, o, on);
+  for (const w of G.wraiths) drawWraith(c, w, on);
+  for (const s of G.ships) drawShip(c, s, on);
+}
+
+function cone(c, half, reach){ c.beginPath(); c.moveTo(LX, LY); c.arc(LX, LY, reach, G.beam - half, G.beam + half); c.closePath(); }
+
+// The lit picture is cut to the shape of the beam. `floor` lifts the whole strait out of the dark for a flare or for dawn.
+function maskLit(floor, lampOn){
+  lx.globalCompositeOperation = 'destination-in';
+  if (floor < .999){
+    if (hasConic && lampOn){
+      const g = lx.createConicGradient(G.beam - Math.PI, LX, LY), f = HA / TAU, s = .012;
+      const lo = 'rgba(0,0,0,' + floor.toFixed(3) + ')', hi = 'rgba(0,0,0,1)';
+      g.addColorStop(0, lo); g.addColorStop(.5 - f - s, lo); g.addColorStop(.5 - f + s * .4, hi);
+      g.addColorStop(.5 + f - s * .4, hi); g.addColorStop(.5 + f + s, lo); g.addColorStop(1, lo);
+      lx.fillStyle = g; lx.fillRect(-30, -30, W + 60, H + 60);
+    } else {
+      lx.globalCompositeOperation = 'destination-out';
+      lx.fillStyle = 'rgba(0,0,0,' + (1 - floor).toFixed(3) + ')';
+      lx.beginPath();
+      if (lampOn){ lx.moveTo(LX, LY); lx.arc(LX, LY, FAR + 60, G.beam + HA, G.beam - HA + TAU); lx.closePath(); }
+      else lx.rect(-30, -30, W + 60, H + 60);
+      lx.fill();
+      lx.globalCompositeOperation = 'destination-in';
+    }
+  }
+  const far = .5 + .5 * floor, g = lx.createRadialGradient(LX, LY, 0, LX, LY, FAR);
+  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.5, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,' + far.toFixed(3) + ')');
+  lx.fillStyle = g; lx.fillRect(-30, -30, W + 60, H + 60);
+  lx.globalCompositeOperation = 'source-over';
+}
+
+function drawLighthouse(){
+  const on = G.blackout <= 0;
+  ctx.save(); ctx.translate(LX, LY);
+  ctx.beginPath(); poly(ctx, islePts, 1.2); ctx.fillStyle = 'rgba(200,230,235,.1)'; ctx.fill();
+  ctx.beginPath(); poly(ctx, islePts, 1); ctx.fillStyle = '#2c3b45'; ctx.fill(); ctx.strokeStyle = 'rgba(170,200,215,.3)'; ctx.lineWidth = 1.2; ctx.stroke();
+  ctx.beginPath(); poly(ctx, islePts, .62); ctx.fillStyle = '#3b4b55'; ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, 15, 0, TAU); ctx.fillStyle = '#efeadb'; ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, 12.5, 0, TAU); ctx.lineWidth = 3.4; ctx.strokeStyle = '#c4473b'; ctx.stroke();
+  ctx.beginPath(); ctx.arc(0, 0, 8.5, 0, TAU); ctx.fillStyle = '#22303a'; ctx.fill();
+  ctx.beginPath(); ctx.arc(0, 0, 5.2, 0, TAU); ctx.fillStyle = on ? '#fff6d6' : '#4a4436'; ctx.fill();
+  ctx.restore();
+  if (!on) return;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  const rr = 54 + (G.flareT > 0 ? 60 : 0), g = ctx.createRadialGradient(LX, LY, 0, LX, LY, rr);
+  g.addColorStop(0, 'rgba(255,240,190,.75)'); g.addColorStop(.3, 'rgba(255,230,163,.22)'); g.addColorStop(1, 'rgba(255,230,163,0)');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(LX, LY, rr, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+function render(){
+  const k = DPR * S;
+  ctx.setTransform(k, 0, 0, k, 0, 0);
+  drawScene(ctx, false);
+
+  const lampOn = G.blackout <= 0;
+  if (lampOn || G.amb > .001){
+    lx.setTransform(1, 0, 0, 1, 0, 0); lx.clearRect(0, 0, lit.width, lit.height);
+    lx.setTransform(k, 0, 0, k, 0, 0);
+    lx.save();
+    if (G.amb <= .001){ cone(lx, HA + .1, FAR + 60); lx.clip(); }
+    drawScene(lx, true);
+    lx.restore();
+    maskLit(G.amb, lampOn);
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(lit, 0, 0); ctx.setTransform(k, 0, 0, k, 0, 0);
+  }
+
+  if (lampOn){
+    // the haze of the beam itself
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    const q = 1 - G.amb * .8, g = ctx.createRadialGradient(LX, LY, 6, LX, LY, FAR);
+    g.addColorStop(0, 'rgba(255,236,170,' + (.2 * q).toFixed(3) + ')'); g.addColorStop(.35, 'rgba(255,236,170,' + (.075 * q).toFixed(3) + ')'); g.addColorStop(1, 'rgba(255,236,170,.012)');
+    ctx.fillStyle = g; cone(ctx, HA, FAR); ctx.fill(); cone(ctx, HA * .55, FAR); ctx.fill();
+    ctx.restore();
+  }
+
+  // warnings that must read in the dark
+  for (const s of G.ships){
+    if (s.peril <= .05) continue;
+    const f = (G.t * 1.5 + s.bob) % 1;
+    ctx.strokeStyle = 'rgba(255,107,87,' + ((1 - f) * s.peril * .9).toFixed(3) + ')'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(s.x, s.y, s.r * 1.6 + f * 22, 0, TAU); ctx.stroke();
+  }
+  for (const z of G.sleepers){
+    if (z.state !== 'sleep' || z.wake < .02) continue;
+    ctx.strokeStyle = 'rgba(255,107,87,.28)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(z.x, z.y, z.r * 1.45, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,107,87,.95)'; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(z.x, z.y, z.r * 1.45, -Math.PI / 2, -Math.PI / 2 + TAU * z.wake); ctx.stroke();
+  }
+  for (const r of G.rings){
+    const f = r.t / r.max;
+    ctx.strokeStyle = 'rgba(' + r.col + ',' + ((1 - f) * .8).toFixed(3) + ')'; ctx.lineWidth = 2 * (1 - f) + .5;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.r0 + (r.r1 - r.r0) * (1 - (1 - f) * (1 - f)), 0, TAU); ctx.stroke();
+  }
+
+  drawLighthouse();
+
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const p of G.parts){
+    ctx.fillStyle = 'rgba(' + p.col + ',' + (p.life / p.max * .9).toFixed(3) + ')';
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, TAU); ctx.fill();
+  }
+  ctx.restore();
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = '600 20px "Barlow Semi Condensed","Arial Narrow",Arial,sans-serif';
+  for (const f of G.floats){
+    const al = Math.min(1, f.life * 1.6);
+    ctx.fillStyle = 'rgba(5,15,23,' + (al * .7).toFixed(3) + ')'; ctx.fillText(f.text, f.x + 1, f.y + 1.5);
+    ctx.fillStyle = 'rgba(' + f.col + ',' + al.toFixed(3) + ')'; ctx.fillText(f.text, f.x, f.y);
+  }
+
+  if (G.blackout > 0){ ctx.fillStyle = 'rgba(2,6,10,.34)'; ctx.fillRect(-20, -20, W + 40, H + 40); }
+  if (G.day > .01){
+    const g = ctx.createLinearGradient(0, 0, W, H * .4);
+    g.addColorStop(0, 'rgba(255,190,130,' + (.26 * G.day).toFixed(3) + ')'); g.addColorStop(1, 'rgba(255,220,180,' + (.04 * G.day).toFixed(3) + ')');
+    ctx.fillStyle = g; ctx.fillRect(-20, -20, W + 40, H + 40);
+  }
+  if (G.flash > 0 && !reduce){ ctx.fillStyle = 'rgba(255,246,214,' + (G.flash * .5).toFixed(3) + ')'; ctx.fillRect(-20, -20, W + 40, H + 40); }
+  const vg = ctx.createRadialGradient(LX, LY, Math.min(W, H) * .4, LX, LY, FAR);
+  vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,' + (.36 * (1 - G.amb * .7)).toFixed(3) + ')');
+  ctx.fillStyle = vg; ctx.fillRect(-20, -20, W + 40, H + 40);
+
+  const sh = G.shake > 0 && !reduce ? G.shake * 9 : 0;
+  cv.style.transform = sh ? 'translate(' + ((Math.random() - .5) * sh).toFixed(1) + 'px,' + ((Math.random() - .5) * sh).toFixed(1) + 'px)' : '';
+}
+
+/* ---------- input ---------- */
+function aim(e){
+  if (e.target.closest && e.target.closest('button')) return;
+  const r = stage.getBoundingClientRect();
+  const x = (e.clientX - r.left) / S - LX, y = (e.clientY - r.top) / S - LY;
+  if (x * x + y * y < 324) return;
+  G.target = Math.atan2(y, x); G.auto = false;
+}
+stage.addEventListener('pointermove', aim);
+stage.addEventListener('pointerdown', aim);
+stage.addEventListener('contextmenu', e => e.preventDefault());
+
+window.addEventListener('keydown', e => {
+  if (e.key === 'ArrowLeft'){ keys.l = true; e.preventDefault(); }
+  else if (e.key === 'ArrowRight'){ keys.r = true; e.preventDefault(); }
+  else if (e.repeat) return;
+  else if (e.key === ' '){
+    if (document.activeElement && document.activeElement.tagName === 'BUTTON' && document.activeElement !== bFlare && hud.hidden) return;
+    if (G.mode === 'play' && !G.paused){ e.preventDefault(); fireFlare(); }
+  }
+  else if (e.key === 'p' || e.key === 'P' || e.key === 'Escape') setPaused(!G.paused);
+  else if (e.key === 'm' || e.key === 'M') toggleSound();
+});
+window.addEventListener('keyup', e => { if (e.key === 'ArrowLeft') keys.l = false; else if (e.key === 'ArrowRight') keys.r = false; });
+window.addEventListener('blur', () => { keys.l = keys.r = false; });
+document.addEventListener('visibilitychange', () => { if (document.hidden) setPaused(true); });
+
+function toggleSound(){ Snd.setMuted(!Snd.muted); bSound.setAttribute('aria-pressed', String(!Snd.muted)); }
+bSound.setAttribute('aria-pressed', String(!Snd.muted));
+bSound.addEventListener('click', () => { Snd.init(); toggleSound(); bSound.blur(); });
+$('bPause').addEventListener('click', () => setPaused(true));
+$('bResume').addEventListener('click', () => { Snd.init(); setPaused(false); });
+bFlare.addEventListener('click', () => { fireFlare(); bFlare.blur(); });
+$('bStart').addEventListener('click', () => { Snd.init(); newRun(); });
+$('bNext').addEventListener('click', () => { Snd.init(); startNight(G.night + 1); });
+$('bAgain').addEventListener('click', () => { Snd.init(); newRun(); });
+
+/* ---------- boot ---------- */
+let last = 0;
+function frame(now){
+  const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
+  if (!G.paused) update(dt);
+  render(); syncHud();
+  requestAnimationFrame(frame);
+}
+function start(data){
+  resize();
+  if (typeof ResizeObserver === 'function') new ResizeObserver(resize).observe(stage);
+  window.addEventListener('resize', resize);
+  makeRocks(7); G.spawnT = .4;
+  if (best > 0) $('tBest').innerHTML = ' Best watch so far: <b>' + fmt(best) + '</b>.';
+  const run = data && data.run;
+  if (run && run.night > 0){
+    G.score = run.score | 0; G.lives = clamp(run.lives | 0, 1, 3); G.streak = run.streak | 0;
+    G.through = run.through | 0; G.burned = run.burned | 0; G.night = (run.night | 0) - 1;
+    resumeCard();
+  } else show('vTitle');
+  last = performance.now();
+  requestAnimationFrame(frame);
+}
+// If the page is updated while someone is mid-watch, they come back at the start of the night they were on.
+const hot = window.claude && window.claude.hot;
+if (hot && typeof hot.snapshot === 'function'){
+  hot.snapshot(() => (G.mode === 'play' || G.mode === 'dawn' || G.mode === 'card')
+    ? { run: { night: G.mode === 'play' ? G.night : G.night + 1, score: G.score, lives: Math.max(1, G.lives), streak: G.streak, through: G.through, burned: G.burned } }
+    : {});
+}
+if (hot && typeof hot.ready === 'function') hot.ready(start); else start((hot && hot.data) || {});
+})();
+</script>
+</body>
+</html>
